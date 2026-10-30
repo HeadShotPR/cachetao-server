@@ -10,9 +10,17 @@ export function deck() {
 }
 export { isWild, meldValid, solveHand } from './cards.js';
 import { solveHand } from './cards.js';
+function generateRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let c = '';
+  for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  return c;
+}
+
 export function newRoom(owner, options = {}) {
   const buyIn = Number(options.buyIn ?? 10);
-  return { rulesVersion:4, id: randomUUID(), code: '', name: options.name || 'Mesa de amigos', owner,
+  const code = String(options.code || generateRoomCode()).toUpperCase();
+  return { rulesVersion:4, id: randomUUID(), code, name: options.name || 'Mesa de amigos', owner,
     clubId: options.clubId || null, tournamentId: options.tournamentId || null,
     private: !!options.private, capacity: Math.min(10, Math.max(2, options.capacity || 4)), points: options.points || 10,
     buyIn, pot: 0,

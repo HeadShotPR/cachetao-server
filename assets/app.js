@@ -267,11 +267,20 @@ document.addEventListener('click',async e=>{
       const r=await api('/practice',{});await openRoom(r.id);
     }
     else if(action==='fill-bots')await roomAction('bots',{count:room.capacity-room.players.filter(p=>!p.bot).length});
-    else if(action==='join-code')showModal('Convite para a sala','<p>Digite o código que você recebeu.</p>',`<form id="${action}"><label>Código do convite<input name="code" minlength="8" maxlength="8" required autocapitalize="characters" placeholder="A1B2C3D4"></label>${buttons('Entrar')}</form>`);
+    else if(action==='join-code')showModal('Entrar com Código','<p>Digite o código da mesa que seu amigo compartilhou com você.</p>',`<form id="${action}"><label>Código da mesa<input name="code" minlength="4" maxlength="12" required autocapitalize="characters" placeholder="Ex: ABC123" style="text-transform:uppercase;"></label>${buttons('Entrar na mesa')}</form>`);
     else if(action==='join-room'){const r=await api('/join',{code:b.dataset.code});await openRoom(r.id);}
     else if(action==='open-room'){if(offline)localGame.resume();await openRoom(b.dataset.id);}
     else if(action==='back-lobby'){if(offline)localGame.pause();room=null;roomWanted=null;await refreshLobby();}
-    else if(action==='copy-code'){try{await navigator.clipboard.writeText(room.code);toast('Código copiado: '+room.code);}catch{toast('Código da mesa: '+room.code);}}
+    else if(action==='copy-code'){
+      const text = `Bora jogar Cachetão! Entra na minha mesa no app com o código: ${room.code}`;
+      try {
+        if (navigator.share) { navigator.share({ title: 'Cachetão CM', text }).catch(()=>{}); }
+        await navigator.clipboard.writeText(room.code);
+        toast('Código copiado: ' + room.code);
+      } catch {
+        toast('Código da mesa: ' + room.code);
+      }
+    }
     else if(action==='view-discards')showDiscardHistory();
     else if(action==='claim')await roomAction('claim',{card:room.discardTop?.id});
     else if(action==='decide-play')await roomAction('decide',{choice:'play'});
