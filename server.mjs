@@ -14,6 +14,29 @@ const users = new Map();
 const tokens = new Map();
 const rooms = new Map();
 
+const DB_FILE = path.join(__dirname, 'users-data.json');
+function loadUsers() {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+      for (const u of data) {
+        users.set(u.id, u);
+      }
+      console.log(`[DB] Carregou ${users.size} contas de usuários salvos.`);
+    }
+  } catch (err) {
+    console.error('[DB] Erro ao carregar users-data.json:', err);
+  }
+}
+function saveUsers() {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify([...users.values()], null, 2), 'utf8');
+  } catch (err) {
+    console.error('[DB] Erro ao salvar users-data.json:', err);
+  }
+}
+loadUsers();
+
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -82,6 +105,7 @@ const server = http.createServer(async (req, res) => {
         const id = 'user-' + Math.random().toString(36).slice(2, 10);
         const user = { id, name, password, avatar: Math.floor(Math.random() * 6), wins: 0, chips: 1000 };
         users.set(id, user);
+        saveUsers();
         const token = 'tok-' + Math.random().toString(36).slice(2, 16);
         tokens.set(token, id);
         return sendJson(res, 200, { token, user: { id: user.id, name: user.name, avatar: user.avatar, wins: user.wins, chips: user.chips } });
@@ -134,13 +158,13 @@ const server = http.createServer(async (req, res) => {
         const capacity = Math.min(10, Math.max(2, Number(body.capacity || 4)));
         const points = Number(body.points || 10);
         const buyIn = Number(body.buyIn || 10);
-        const bots = Math.min(capacity - 1, Math.max(0, Number(body.bots || 0)));
         const isPrivate = !!body.private;
         const name = String(body.name || `Sala de ${currentUser.name}`).slice(0, 48);
 
         const r = newRoom(currentUser.id, { name, capacity, points, buyIn, private: isPrivate });
+        r.practice = false; // Salas online NUNCA são treino
         addPlayer(r, { id: currentUser.id, name: currentUser.name, avatar: currentUser.avatar });
-        if (bots > 0) setBots(r, bots);
+        // SEM BOTS: Salas online são 100% pessoas reais
 
         rooms.set(r.id, r);
         return sendJson(res, 200, roomView(r, currentUser.id));
@@ -200,7 +224,13 @@ const server = http.createServer(async (req, res) => {
           requireThat(canStartNextRound(r), 'Aguarde a janela de reentrada.');
           startRound(r);
         }
-        else if (action === 'bots') setBots(r, body.count);
+        else if (action === 'bots') {
+          if (r.practice) {
+            setBots(r, body.count);
+          } else {
+            throw new Error('Salas online são apenas para pessoas reais (sem bots).');
+          }
+        }
         else if (action === 'chat') {
           const text = String(body.text || '').trim().slice(0, 160);
           if (text) {
