@@ -2,12 +2,12 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { newRoom, addPlayer, startRound, roomView, move, tick, touch, requireThat, declarePifado, reenter, claimDiscard, canStartNextRound, declineReentry, decideRound, claimKnock } from './assets/game.js';
-import { setBots, stepBots } from './assets/bots.js';
+import { newRoom, addPlayer, startRound, roomView, move, tick, touch, requireThat, declarePifado, reenter, claimDiscard, canStartNextRound, declineReentry, decideRound, claimKnock } from './cacheta-mod/assets/game.js';
+import { setBots, stepBots } from './cacheta-mod/assets/bots.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ASSETS_DIR = path.join(__dirname, 'assets');
+const ASSETS_DIR = path.join(__dirname, 'cacheta-mod', 'assets');
 const PORT = process.env.PORT || 8787;
 
 const users = new Map();
@@ -43,7 +43,7 @@ function getAuthUser(req) {
   return userId ? users.get(userId) : null;
 }
 
-// Background tick & bots loop (runs every 500ms)
+// Background tick & bots loop
 setInterval(() => {
   const now = Date.now();
   for (const [id, r] of rooms) {
@@ -65,12 +65,6 @@ const server = http.createServer(async (req, res) => {
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname;
-
-  // Health check for Render
-  if (pathname === '/health' || pathname === '/ping') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    return res.end('OK');
-  }
 
   if (pathname.startsWith('/api/')) {
     const apiPath = pathname.slice(4);
@@ -245,7 +239,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Serve static assets for web players
+  // Serve static assets
   let filePath = path.join(ASSETS_DIR, pathname === '/' ? 'index.html' : pathname);
   const ext = path.extname(filePath).toLowerCase();
   const mimeTypes = {
@@ -268,5 +262,16 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Servidor Cachetão CM rodando na porta ${PORT}`);
+  console.log(`\n======================================================`);
+  console.log(` Servidor Cachetão CM Online rodando na porta ${PORT}!`);
+  console.log(` Acesse localmente: http://localhost:${PORT}`);
+  console.log(` Na rede Wi-Fi / IP local: http://<seu-ip>:${PORT}`);
+  console.log(` Regras do Cachetão:`);
+  console.log(`  - 2 a 10 jogadores`);
+  console.log(`  - 4 coringas (vira define valor seguinte na mesma cor)`);
+  console.log(`  - Decisão: Jogar ou Correr (-1 pt); com 1 pt obrigatório jogar`);
+  console.log(`  - BATI (9 cartas) e BATI DE 10 (2 pts de penalidade)`);
+  console.log(`  - Pegar descarte fora da vez com BATI / BATI DE 10`);
+  console.log(`  - Salas pagas com buy-in e pote para o campeão`);
+  console.log(`======================================================\n`);
 });

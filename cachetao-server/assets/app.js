@@ -6,10 +6,11 @@ import { OfflineGame } from './offline.js';
 import { arena, animateAction } from './arena.js';
 const $ = (s) => document.querySelector(s);
 const escape = (v) => String(v ?? '').replace(/[&<>"']/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const DEFAULT_SERVER = 'https://cachetao.onrender.com';
 const android = location.hostname === 'appassets.androidplatform.net';
-let base = localStorage.getItem('aurora.server') || (android ? '' : location.origin);
+let base = localStorage.getItem('aurora.server') || DEFAULT_SERVER;
 let savedMode = localStorage.getItem('cm.mode');
-let offline = savedMode ? savedMode === 'offline' : (android && !base);
+let offline = savedMode === 'offline';
 const localGame = new OfflineGame(localStorage);
 localGame.pause();
 let token = offline ? 'offline' : localStorage.getItem('aurora.token') || '';
@@ -40,11 +41,166 @@ function navigation(){return `<nav aria-label="Navegação principal">${[['lobby
 function empty(title,text,action='',label='') { return `<div class="empty"><span class="empty-symbol">♧</span><h3>${title}</h3><p>${text}</p>${action?`<button class="small" data-action="${action}">${label}</button>`:''}</div>`; }
 function renderAuth() {
   stopDealing();
-  $('#app').innerHTML = `<div class="auth-screen"><section class="auth-art">${brand}<div><div class="eyebrow">A SUA PRÓXIMA BOA PARTIDA</div><h1>Na mesa,<br>todos se encontram.</h1><p>O prazer da cacheta. A companhia dos amigos. Um novo lugar para jogar.</p></div><span class="connection">SALAS ONLINE · TREINO COM BOTS</span></section><section class="auth-pane"><div class="auth-form">${brand}<div class="eyebrow">BEM-VINDO À MESA</div><h2>${authMode==='login'?'Bom ter você aqui.':'O próximo jogo é seu.'}</h2><p>Entre, encontre sua turma e distribua as cartas.</p><div class="tabs"><button class="${authMode==='login'?'active':''}" data-auth="login">Entrar</button><button class="${authMode==='register'?'active':''}" data-auth="register">Criar conta</button></div><form id="auth"><label>Seu nome de jogador<input name="name" autocomplete="username" minlength="3" maxlength="24" required placeholder="Como vamos chamar você?"></label><label>Senha<input name="password" type="password" minlength="8" maxlength="128" autocomplete="${authMode==='login'?'current-password':'new-password'}" required placeholder="Pelo menos 8 caracteres"></label><p id="auth-error" class="error" role="alert"></p><button class="gold" type="submit">${authMode==='login'?'Entrar na Cacheta CM':'Criar minha conta'} <span aria-hidden="true">→</span></button><details ${!base?'open':''}><summary>Configurar conexão</summary><label>Endereço do servidor Render<input name="server" type="url" value="${escape(base)}" placeholder="https://seu-app.onrender.com"></label><p>Para jogar com amigos, todos precisam usar o mesmo servidor no Render (HTTPS).</p></details></form><button class="gold wide" data-action="guest-practice" style="margin-top:18px">Jogar sem internet →</button><p class="auth-note">O treino com bots funciona sem internet, sem conta e sem configurar servidor. Sua partida fica salva neste aparelho. Jogo gratuito, sem apostas. Esta versão de teste salva sua conta no servidor escolhido. Guarde sua senha: a recuperação por e-mail ainda não está disponível.</p></div></section></div>`;
+  $('#app').innerHTML = `
+    <div class="welcome-screen">
+      <div class="welcome-header">
+        ${brand}
+        <div class="welcome-subtitle">Cachetão Oficial · 2 a 10 Jogadores</div>
+      </div>
+
+      <div class="welcome-cards">
+        <!-- BLOCO 1: MODO OFFLINE / BOTS -->
+        <div class="mode-card offline-card">
+          <div class="card-badge">SEM INTERNET</div>
+          <div class="card-icon">🤖</div>
+          <h3>Treino com Bots</h3>
+          <p>Jogue agora contra a máquina. Sem cadastro, sem esperar ninguém e sem gastar internet. Sua partida fica salva neste aparelho.</p>
+          <div class="card-actions">
+            <button class="gold wide" data-action="guest-practice" style="padding:14px;font-size:14px;font-weight:700;">
+              ⚡ Jogar com Bots Agora
+            </button>
+            <button class="ghost wide" data-action="guest-practice-custom" style="font-size:12px;">
+              ⚙ Personalizar Treino (2 a 10)
+            </button>
+          </div>
+        </div>
+
+        <!-- BLOCO 2: MODO ONLINE / AMIGOS -->
+        <div class="mode-card online-card">
+          <div class="card-badge live">ONLINE NO RENDER</div>
+          <div class="card-icon">👥</div>
+          <h3>Jogar com Amigos</h3>
+          <p>Crie salas de 2 a 10 pessoas, jogue com pessoas reais e dispute o pote de fichas da mesa.</p>
+
+          <div class="tabs">
+            <button class="${authMode==='login'?'active':''}" data-auth="login">Entrar</button>
+            <button class="${authMode==='register'?'active':''}" data-auth="register">Criar conta</button>
+          </div>
+
+          <form id="auth" autocomplete="off">
+            <label>Seu nome de jogador
+              <input name="name" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" minlength="3" maxlength="24" required placeholder="Como vamos chamar você?">
+            </label>
+            <label>Senha
+              <input name="password" type="password" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false" minlength="8" maxlength="128" required placeholder="Pelo menos 8 caracteres">
+            </label>
+            <p id="auth-error" class="error" role="alert"></p>
+            <button class="gold wide" type="submit" style="padding:13px;font-size:13px;font-weight:700;">
+              ${authMode==='login'?'Entrar na Mesa Online':'Criar Minha Conta Online'} →
+            </button>
+
+            <details class="server-config" ${!base?'open':''}>
+              <summary>⚙ Servidor (${escape(base.replace('https://',''))})</summary>
+              <label style="margin-top:8px;">Endereço do servidor
+                <input name="server" type="url" autocomplete="off" value="${escape(base)}" placeholder="https://cachetao.onrender.com">
+              </label>
+            </details>
+          </form>
+        </div>
+      </div>
+    </div>
+  `;
 }
 function roomTile(r){return `<article class="tile"><span class="tile-icon">♧</span><span class="badge">${r.practice?'COM BOTS':'ONLINE'}</span><h3>${escape(r.name)}</h3><p>${r.bots? r.bots+' bots identificados nesta sala.':'Entre e convide seus amigos.'}</p><div class="meta"><span>${r.count}/${r.capacity} lugares</span><span>${r.points} pontos</span>${r.buyIn?`<span>Entrada: ${r.buyIn} fichas</span>`:''}</div><button class="gold" data-action="join-room" data-code="${escape(r.code)}" ${r.count>=r.capacity?'disabled':''}>${r.count>=r.capacity?'Sala cheia':'Entrar na sala →'}</button></article>`;}
-function offlineLobbyPage(){return `<section class="hero rooms-hero"><div class="eyebrow">CACHETA CM · MODO OFFLINE</div><h1>Sua mesa.<br>Em qualquer lugar.</h1><p>Jogue com bots sem internet, sem conta e sem configurar nada. Um novo treino substitui o anterior.</p><div class="actions"><button class="gold" data-action="practice">Jogar com bots →</button><button data-action="create-room">Personalizar treino</button></div><span class="hero-tag">SALAS DE 2 A 10 LUGARES · SALVO NESTE APARELHO</span></section>${lobby.myRooms.length?`<div class="section-head"><h2>Seu treino salvo</h2></div><div class="list-item"><div class="grow"><h3>${escape(lobby.myRooms[0].name)}</h3><p>Continue de onde parou.</p></div><button class="gold" data-action="open-room" data-id="${escape(lobby.myRooms[0].id)}">Continuar treino</button></div>`:''}<section class="info-panel" style="margin-top:24px"><h2>Jogar com amigos</h2><p>As salas entre pessoas precisam de um servidor online. O treino com bots funciona inteiramente neste aparelho.</p><button data-action="online-mode">Configurar jogo online</button></section>`;}
-function lobbyPage(){if(offline)return offlineLobbyPage();return `<section class="hero rooms-hero"><div class="eyebrow">CACHETA CM · ESCOLHA SUA SALA</div><h1>A próxima mão<br>já pode começar.</h1><p>Experimente contra bots ou crie uma sala para jogar com amigos (2 a 10 pessoas).</p><div class="actions"><button class="gold" data-action="guest-practice">Jogar sem internet →</button><button data-action="create-room">＋ Criar sala</button></div><span class="hero-tag">2 A 10 LUGARES · SALAS PAGAS E TREINO</span></section>${lobby.myRooms.length?`<div class="section-head"><h2>Suas salas</h2></div><div class="list">${lobby.myRooms.map(r=>`<div class="list-item"><span>♧</span><div class="grow"><h3>${escape(r.name)}</h3><p>${r.practice?'Treino com bots':'Sala online'} · ${r.status==='waiting'?'Aguardando início':'Em andamento'}</p></div><button class="small gold" data-action="open-room" data-id="${r.id}">Voltar à sala</button></div>`).join('')}</div>`:''}<div class="section-head row"><div><h2>Salas abertas</h2><p>Salas com bots são identificadas antes de entrar.</p></div><button class="small" data-action="join-code">Tenho um código</button></div>${lobby.rooms.length?`<div class="cards-grid">${lobby.rooms.map(roomTile).join('')}</div>`:empty('Monte sua sala.','Você pode completar os lugares com bots e jogar agora.','create-room','Criar sala')}<div class="footer-note">SALAS DE 2 A 10 LUGARES · SALAS PAGAS COM FICHAS E TREINO COM BOTS</div>`;}
+function offlineLobbyPage(){
+  return `
+    <div class="hub-container">
+      <div class="lobby-banner">
+        <div>
+          <span class="eyebrow">MODO OFFLINE · SALVO NO APARELHO</span>
+          <h2>🤖 Treino com Bots</h2>
+          <p>Treine suas jogadas contra a máquina sem gastar internet.</p>
+        </div>
+        <div class="banner-buttons">
+          <button class="gold" data-action="practice">⚡ Partida Rápida</button>
+          <button data-action="create-room">⚙ Personalizar (2 a 10)</button>
+        </div>
+      </div>
+
+      ${lobby.myRooms.length?`
+        <div class="section-subhead"><h3>Seu Treino em Andamento</h3></div>
+        <div class="list" style="margin-bottom:24px;">
+          <div class="list-item">
+            <span>♧</span>
+            <div class="grow">
+              <h3>${escape(lobby.myRooms[0].name)}</h3>
+              <p>Continue exatamente de onde você parou.</p>
+            </div>
+            <button class="gold small" data-action="open-room" data-id="${escape(lobby.myRooms[0].id)}">Continuar treino</button>
+          </div>
+        </div>
+      `:''}
+
+      <div class="mode-card online-card" style="margin-top:28px;">
+        <div class="card-badge live">MULTIJOGADOR ONLINE</div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:240px;">
+            <h3 style="font-size:20px;margin-bottom:6px;">Jogar com Amigos e Pessoas Reais</h3>
+            <p style="margin:0;font-size:12px;">Crie salas de 2 a 10 pessoas, jogue com amigos na internet e dispute potes de fichas.</p>
+          </div>
+          <button class="gold" data-action="online-mode" style="white-space:nowrap;padding:12px 20px;">
+            🌐 Ir para Modo Online →
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function lobbyPage(){
+  if(offline) return offlineLobbyPage();
+  return `
+    <div class="hub-container">
+      <div class="lobby-banner">
+        <div>
+          <span class="eyebrow">TREINO COM BOTS</span>
+          <h2>🤖 Praticar Contra Bots</h2>
+          <p>Treine contra a máquina sem esperar jogadores (não afeta vitórias online).</p>
+        </div>
+        <div class="banner-buttons">
+          <button class="gold" data-action="practice">⚡ Treinar Agora</button>
+          <button class="ghost" data-action="create-room">⚙ Personalizar (2 a 10)</button>
+        </div>
+      </div>
+
+      <div class="lobby-section-head">
+        <div>
+          <span class="eyebrow">MULTIJOGADOR ONLINE NO RENDER</span>
+          <h2>👥 Salas com Amigos (Pessoas Reais)</h2>
+          <p>Mesas de 2 a 10 pessoas, buy-in e pote de fichas acumulado para o vencedor.</p>
+        </div>
+        <div class="actions">
+          <button class="gold" data-action="create-room">＋ Criar Sala Online</button>
+          <button data-action="join-code">🔑 Tenho um Código</button>
+        </div>
+      </div>
+
+      ${lobby.myRooms.length ? `
+        <div class="section-subhead"><h3>Suas salas em andamento</h3></div>
+        <div class="list" style="margin-bottom:24px;">
+          ${lobby.myRooms.map(r=>`
+            <div class="list-item">
+              <span>♧</span>
+              <div class="grow">
+                <h3>${escape(r.name)}</h3>
+                <p>${r.practice?'Treino com bots':'Sala online'} · ${r.status==='waiting'?'Aguardando início':'Em andamento'}</p>
+              </div>
+              <button class="small gold" data-action="open-room" data-id="${r.id}">Voltar à mesa</button>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      <div class="section-subhead"><h3>Salas Abertas da Mesa</h3></div>
+      ${lobby.rooms.length ? `
+        <div class="cards-grid">${lobby.rooms.map(roomTile).join('')}</div>
+      ` : empty('Nenhuma sala aberta no momento.', 'Você pode criar sua sala e convidar seus amigos com o código!', 'create-room', '＋ Criar Nova Sala Online')}
+
+      <div class="footer-note" style="margin-top:30px;">
+        SALAS ONLINE DE 2 A 10 LUGARES · TREINO COM BOTS INTEGRADO
+      </div>
+    </div>
+  `;
+}
 function rulesPage(){return `<div class="page-title"><h1>Como jogar Cachetão</h1><p>Regras oficiais do Cachetão CM · Versão 0.8.6</p></div><div class="two-columns"><section class="info-panel"><h2>104 cartas e 4 coringas</h2><p>Dois baralhos de 52 cartas, sem jokers impressos: 104 cartas. Cada participante recebe 9 cartas. A vira define os coringas da rodada: são as cartas de valor imediatamente seguinte nos dois naipes da mesma cor da vira (ex: vira 5♦ de ouros gera 6♦ e 6♥ como coringas; vira K♠ de espadas gera A♠ e A♣). Com dois baralhos, há sempre 4 coringas em disputa.</p></section><section class="info-panel"><h2>Decisão: Jogar ou Correr</h2><p>Com as 9 cartas em mãos, os jogadores escolhem por ordem na mesa se vão disputar a rodada ou correr:</p><p>• <strong>Correr:</strong> O jogador larga a mão e perde apenas <strong>1 ponto</strong>, evitando o risco de perder 2 pontos para uma batida de 10.</p><p>• <strong>Cartas de volta ao monte:</strong> As cartas de quem corre voltam ao monte e são reembaralhadas na hora.</p><p>• <strong>Regra do 1 Ponto:</strong> Quem estiver com apenas 1 ponto restante é <strong>obrigado a jogar a rodada</strong>, sem opção de correr.</p></section><section class="info-panel"><h2>Batida: "BATI" e "BATI DE 10"</h2><p>Não há mais botão de 'Armado'. Você tem diretamente os botões <strong>BATI</strong> (9 cartas) e <strong>BATI DE 10</strong> (10 cartas):</p><p>• <strong>Na sua vez:</strong> Compre e clique em BATI (selecionando um descarte) ou BATI DE 10 (usando todas as 10 cartas).</p><p>• <strong>Fora da sua vez (Pegar e Bater):</strong> Se qualquer adversário descartar a carta que você precisa para bater, mesmo fora da sua vez você pode tocar em <strong>BATI</strong> ou <strong>BATI DE 10</strong>. A carta vem direto para sua mão e a batida é confirmada automaticamente (a não ser que o jogador da vez tenha batido na mesma jogada).</p><p>• <strong>Penalidade:</strong> Batida simples de 9 custa 1 ponto aos perdedores. Batida de 10 custa <strong>2 pontos</strong>.</p></section><section class="info-panel"><h2>Salas pagas e 2 a 10 Jogadores</h2><p>As salas suportam de <strong>2 a 10 participantes</strong> (pessoas reais ou bots de treino).</p><p>Nas salas pagas, cada jogador paga uma taxa de entrada (buy-in) em fichas do jogo. As fichas formam o <strong>Pote da Mesa</strong>, entregue integralmente ao grande campeão que eliminar os adversários.</p><p>Todos começam com 10 pontos. Quem zera é eliminado.</p></section></div>`;}
 function renderLobby(){stopDealing();if(!lobby||!user)return;$('#app').innerHTML=header()+`<div class="layout">${navigation()}<main>${page==='rules'?rulesPage():lobbyPage()}</main></div>`;}
 function card(c,{action='',selected:falseSelected=false,wild=null,disabled=false}={}) { if(!c)return '<div class="playing-card back" aria-label="Carta virada"></div>';if(c.joker)return `<button class="playing-card joker-card ${falseSelected?'selected':''}" ${action?`data-action="${action}" data-id="${c.id}"`:''} ${disabled?'disabled':''} aria-label="Coringa impresso${falseSelected?', selecionada':''}" aria-pressed="${falseSelected}"><span>★</span><span class="big-suit">★</span><span class="wild-label">CORINGA</span></button>`;return `<button class="playing-card ${c.s===1||c.s===2?'red':''} ${falseSelected?'selected':''}" ${action?`data-action="${action}" data-id="${c.id}"`:''} ${disabled?'disabled':''} aria-label="${ranks[c.r]} de ${['paus','ouros','copas','espadas'][c.s]}${falseSelected?', selecionada':''}" aria-pressed="${falseSelected}"><span>${ranks[c.r]}<br><span class="corner">${suits[c.s]}</span></span><span class="big-suit">${suits[c.s]}</span><span class="bottom">${ranks[c.r]} ${suits[c.s]}</span>${isWild(c,wild)?'<span class="wild-label">CORINGA</span>':''}</button>`; }
@@ -96,6 +252,10 @@ document.addEventListener('click',async e=>{
     pending=true;
     if(action==='online-mode'){localGame.pause();offline=false;localStorage.setItem('cm.mode','online');token=localStorage.getItem('aurora.token')||'';user=null;room=null;roomWanted=null;renderAuth();}
     else if(action==='create-room')createRoomModal();
+    else if(action==='guest-practice-custom'){
+      offline=true;localStorage.setItem('cm.mode','offline');token='offline';user=localGame.user;localGame.resume();
+      createRoomModal();
+    }
     else if(action==='practice'||action==='guest-practice'){
       if(action==='guest-practice'){offline=true;localStorage.setItem('cm.mode','offline');token='offline';user=localGame.user;localGame.resume();}
       const r=await api('/practice',{});await openRoom(r.id);
