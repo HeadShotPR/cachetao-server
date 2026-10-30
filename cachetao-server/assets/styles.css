@@ -26,6 +26,7 @@
 .mode-card .tabs{margin:0 0 16px}
 .mode-card label{font-size:11px;margin-bottom:12px}
 .mode-card input{padding:12px 14px;font-size:16px}
+.masked-pass{-webkit-text-security:disc!important;text-security:disc!important}
 .server-config{margin-top:14px;font-size:11px;color:var(--muted)}
 .server-config summary{cursor:pointer;color:#7e9a8d}
 

@@ -75,7 +75,7 @@ const server = http.createServer(async (req, res) => {
         const name = String(body.name || '').trim();
         const password = String(body.password || '');
         if (name.length < 3 || name.length > 24) throw new Error('Nome deve ter de 3 a 24 caracteres.');
-        if (password.length < 8) throw new Error('Senha deve ter pelo menos 8 caracteres.');
+        if (password.length < 4) throw new Error('Senha deve ter pelo menos 4 caracteres.');
         if ([...users.values()].some(u => u.name.toLowerCase() === name.toLowerCase())) {
           throw new Error('Este nome já está em uso.');
         }

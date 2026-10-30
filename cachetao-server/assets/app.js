@@ -77,12 +77,12 @@ function renderAuth() {
             <button class="${authMode==='register'?'active':''}" data-auth="register">Criar conta</button>
           </div>
 
-          <form id="auth" autocomplete="off">
+          <form id="auth" autocomplete="off" autocorrect="off">
             <label>Seu nome de jogador
-              <input name="name" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" minlength="3" maxlength="24" required placeholder="Como vamos chamar você?">
+              <input name="player_nick" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" minlength="3" maxlength="24" required placeholder="Como vamos chamar você?">
             </label>
             <label>Senha
-              <input name="password" type="password" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false" minlength="8" maxlength="128" required placeholder="Pelo menos 8 caracteres">
+              <input name="player_pin" type="text" class="masked-pass" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" minlength="4" maxlength="128" required placeholder="Pelo menos 4 dígitos">
             </label>
             <p id="auth-error" class="error" role="alert"></p>
             <button class="gold wide" type="submit" style="padding:13px;font-size:13px;font-weight:700;">
@@ -301,10 +301,12 @@ document.addEventListener('submit',async e=>{
   const f=e.target,values=Object.fromEntries(new FormData(f)),submit=f.querySelector('[type=submit]');if(submit)submit.disabled=true;
   try{
     if(f.id==='auth'){
-      const input=values.server.trim().replace(/\/$/,'');const url=new URL(input);
+      const input=(values.server || base).trim().replace(/\/$/,'');const url=new URL(input);
       if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.pathname!=='/'||url.search||url.hash)throw new Error('Informe apenas o endereço do servidor, como https://jogo.exemplo.com.');
       base=url.origin;localStorage.setItem('aurora.server',base);
-      const result=await api('/'+authMode,{name:values.name,password:values.password});token=result.token;user=result.user;localStorage.setItem('aurora.token',token);await refreshLobby();
+      const name = (values.player_nick || values.name || '').trim();
+      const password = values.player_pin || values.password || '';
+      const result=await api('/'+authMode,{name,password});token=result.token;user=result.user;localStorage.setItem('aurora.token',token);await refreshLobby();
     }else if(f.id==='create-room'){const r=await api('/rooms',{...values,capacity:Number(values.capacity),points:Number(values.points),buyIn:Number(values.buyIn||0),private:values.private==='on',bots:Number(values.bots||0)});$('#modal').close();await openRoom(r.id);}
     else if(f.id==='join-code'){const r=await api('/join',values);$('#modal').close();await openRoom(r.id);}
     else if(f.id==='chat'){await roomAction('chat',values);$('#modal').close();}
