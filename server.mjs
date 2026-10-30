@@ -2,12 +2,12 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { newRoom, addPlayer, startRound, roomView, move, tick, touch, requireThat, declarePifado, reenter, claimDiscard, canStartNextRound, declineReentry, decideRound, claimKnock } from './cacheta-mod/assets/game.js';
-import { setBots, stepBots } from './cacheta-mod/assets/bots.js';
+import { newRoom, addPlayer, startRound, roomView, move, tick, touch, requireThat, declarePifado, reenter, claimDiscard, canStartNextRound, declineReentry, decideRound, claimKnock } from './assets/game.js';
+import { setBots, stepBots } from './assets/bots.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ASSETS_DIR = path.join(__dirname, 'cacheta-mod', 'assets');
+const ASSETS_DIR = path.join(__dirname, 'assets');
 const PORT = process.env.PORT || 8787;
 
 const users = new Map();
