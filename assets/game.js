@@ -246,7 +246,11 @@ export function decideRound(room, uid, choice) {
     room.messages.push({ name: 'Mesa', text: `${p.name} correu da rodada (-1 ponto).`, at: Date.now() });
   } else {
     p.folded = false;
-    room.messages.push({ name: 'Mesa', text: `${p.name} vai jogar a rodada.`, at: Date.now() });
+    if (p.points <= 1) {
+      room.messages.push({ name: 'Mesa', text: `${p.name} tem 1 ponto e entra automaticamente na disputa.`, at: Date.now() });
+    } else {
+      room.messages.push({ name: 'Mesa', text: `${p.name} vai jogar a rodada.`, at: Date.now() });
+    }
   }
   room.messages = room.messages.slice(-30);
 
@@ -269,6 +273,12 @@ export function decideRound(room, uid, choice) {
   room.decisionIndex++;
   if (room.decisionIndex < room.decisionOrder.length) {
     room.decisionDeadline = Date.now() + 15000;
+    const nextSeat = room.decisionOrder[room.decisionIndex];
+    const nextPlayer = room.players[nextSeat];
+    if (nextPlayer && nextPlayer.points <= 1) {
+      decideRound(room, nextPlayer.id, 'play');
+      return;
+    }
   } else {
     let returned = 0;
     for (const pl of room.players) {
@@ -302,11 +312,23 @@ export function decideRound(room, uid, choice) {
   touch(room);
 }
 export function tick(room, now = Date.now()) {
-  if(room.status==='dealing'){if(now<room.deal.endsAt)return false;room.status='decision';room.decisionIndex=0;room.decisionDeadline=now+15000;touch(room);return true;}
+  if(room.status==='dealing'){
+    if(now<room.deal.endsAt)return false;
+    room.status='decision';
+    room.decisionIndex=0;
+    room.decisionDeadline=now+15000;
+    touch(room);
+    const firstSeat = room.decisionOrder?.[0];
+    const firstPlayer = room.players[firstSeat];
+    if (firstPlayer && firstPlayer.points <= 1) {
+      decideRound(room, firstPlayer.id, 'play');
+    }
+    return true;
+  }
   if(room.status==='decision'&&now>=room.decisionDeadline){
     const seat=room.decisionOrder?.[room.decisionIndex];
     const p=room.players[seat];
-    if(p){decideRound(room,p.id,'fold');return true;}
+    if(p){decideRound(room,p.id,p.points<=1?'play':'fold');return true;}
   }
   if(['claiming','offered'].includes(room.status)&&now>=room.claimUntil){
     if(room.status==='claiming')resolveClaims(room);else{room.status='playing';room.offer=null;room.claimUntil=null;room.deadline=Date.now()+45000;touch(room);}return true;

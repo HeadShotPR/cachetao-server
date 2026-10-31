@@ -14,10 +14,24 @@ export function meldValid(cards, wild) {
   if (cards.some(c=>c.joker)) return false;
   const naturals = cards.filter(c => !isWild(c, wild));
   if (cards.length - naturals.length > 1 || naturals.length < 2) return false;
-  if (cards.length <= 5 && naturals.every(c => c.r === naturals[0].r)) {
+  if (naturals.every(c => c.r === naturals[0].r)) {
     const counts = {};
     for (const c of naturals) counts[c.s] = (counts[c.s] || 0) + 1;
-    if (Math.max(...Object.values(counts)) <= 2) return true;
+    const maxCount = Math.max(...Object.values(counts));
+    const distinctSuits = Object.keys(counts).length;
+
+    if (cards.length === 3) {
+      // Trinca: não pode ter 2 naipes iguais! Todos os naipes devem ser diferentes.
+      if (maxCount === 1) return true;
+    } else if (cards.length === 4) {
+      // Quadra (bater de 10): 4 naipes diferentes OU 3 naipes diferentes + a 4ª carta com naipe igual.
+      // Proíbe 2 pares de naipes repetidos (ex: 2 de espadas e 2 de copas) e 3 do mesmo naipe.
+      if (maxCount <= 2) {
+        if (naturals.length === 4 && distinctSuits >= 3) return true;
+        if (naturals.length === 3 && distinctSuits >= 2) return true;
+      }
+    }
+    return false;
   }
   if (!naturals.every(c => c.s === naturals[0].s)) return false;
   return [false, true].some(high => {
