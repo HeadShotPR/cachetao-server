@@ -33,14 +33,57 @@ async function api(path,body) {
   try { response = await fetch(base + '/api' + path,{method:body === undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(9000)}); }
   catch { connected=false; throw new Error('Sem conexão com o servidor. Confira o endereço e sua rede.'); }
   const result=await response.json();
-  if (!response.ok) { if(response.status===401 && !['/login','/register'].includes(path)){ token='';localStorage.removeItem('aurora.token');user=null;room=null;roomWanted=null;renderAuth(); } throw new Error(result.error || 'Não foi possível concluir.'); }
+  if (!response.ok) {
+    if(response.status===401 && !['/login','/register'].includes(path)){
+      token='';
+      localStorage.removeItem('aurora.token');
+      user=null;
+      room=null;
+      roomWanted=null;
+      tryAutoLogin().then(ok => { if(!ok) renderAuth(); });
+      return;
+    }
+    throw new Error(result.error || 'Não foi possível concluir.');
+  }
   connected=true;return result;
 }
 function header() { return `<header>${brand}<div class="header-right"><span class="connection">${offline?'SEM INTERNET':connected?'CONECTADO':'RECONECTANDO'}</span>${user?`<div class="profile">${avatar(user)}<div><strong>${escape(user.name)}</strong><small>${user.wins} vitórias</small></div></div><button class="ghost small" data-action="settings" aria-label="Configurações">⚙</button>`:''}</div></header>`; }
 function navigation(){return `<nav aria-label="Navegação principal">${[['lobby','♧','Salas'],['rules','☷','Como jogar']].map(([id,icon,text])=>`<button data-page="${id}" class="${page===id?'active':''}"><span class="ico">${icon}</span>${text}</button>`).join('')}<div class="nav-note">CACHETA CM<br>Salas e treino com bots<br>Versão 0.8.6</div></nav>`;}
+async function tryAutoLogin() {
+  if (offline || !base) return false;
+  try {
+    const raw = localStorage.getItem('cm.creds');
+    if (!raw) return false;
+    const creds = JSON.parse(raw);
+    if (!creds?.name || !creds?.password) return false;
+    let res;
+    try {
+      res = await api('/login', creds);
+    } catch (e1) {
+      try {
+        res = await api('/register', creds);
+      } catch (e2) {
+        return false;
+      }
+    }
+    if (res?.token && res?.user) {
+      token = res.token;
+      user = res.user;
+      localStorage.setItem('aurora.token', token);
+      await refreshLobby();
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
 function empty(title,text,action='',label='') { return `<div class="empty"><span class="empty-symbol">♧</span><h3>${title}</h3><p>${text}</p>${action?`<button class="small" data-action="${action}">${label}</button>`:''}</div>`; }
 function renderAuth() {
   stopDealing();
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('cm.creds') || '{}'); } catch {}
+  const savedNick = saved.name || '';
+  const savedPin = saved.password || '';
   $('#app').innerHTML = `
     <div class="welcome-screen">
       <div class="welcome-header">
@@ -79,10 +122,10 @@ function renderAuth() {
 
           <form id="auth" autocomplete="off" autocorrect="off">
             <label>Seu nome de jogador
-              <input name="player_nick" type="text" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" minlength="3" maxlength="24" required placeholder="Como vamos chamar você?">
+              <input name="player_nick" type="text" value="${escape(savedNick)}" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" minlength="3" maxlength="24" required placeholder="Como vamos chamar você?">
             </label>
             <label>Senha
-              <input name="player_pin" type="text" class="masked-pass" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" minlength="4" maxlength="128" required placeholder="Pelo menos 4 dígitos">
+              <input name="player_pin" type="text" value="${escape(savedPin)}" class="masked-pass" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" minlength="4" maxlength="128" required placeholder="Pelo menos 4 dígitos">
             </label>
             <p id="auth-error" class="error" role="alert"></p>
             <button class="gold wide" type="submit" style="padding:13px;font-size:13px;font-weight:700;">
@@ -308,7 +351,7 @@ document.addEventListener('click',async e=>{
     else if(action==='settings')showModal('Do seu jeito',`<p>Cacheta CM · versão de teste 0.8.6</p><p>${offline?'Modo offline · partida salva neste aparelho':'Servidor: '+escape(base)}</p><div class="list"><button data-action="toggle-sound">${muted?'Ativar':'Desativar'} sons das cartas</button><button data-action="logout">${offline?'Voltar ao início':'Sair da conta'}</button></div>`);
     else if(action==='toggle-sound'){muted=!muted;localStorage.setItem('aurora.muted',muted?'1':'0');$('#modal').close();toast(muted?'Som desligado.':'Som ligado.');}
     else if(action==='logout'&&offline){localGame.pause();room=null;roomWanted=null;$('#modal').close();await refreshLobby();}
-    else if(action==='logout'){await api('/logout',{});token='';user=null;room=null;roomWanted=null;localStorage.removeItem('aurora.token');$('#modal').close();renderAuth();}
+    else if(action==='logout'){await api('/logout',{});token='';user=null;room=null;roomWanted=null;localStorage.removeItem('aurora.token');localStorage.removeItem('cm.creds');$('#modal').close();renderAuth();}
   }catch(err){toast(err.message);if(room){try{await openRoom(room.id);}catch{}}}finally{pending=false;}
 });
 document.addEventListener('submit',async e=>{
@@ -321,7 +364,26 @@ document.addEventListener('submit',async e=>{
       base=url.origin;localStorage.setItem('aurora.server',base);
       const name = (values.player_nick || values.name || '').trim();
       const password = values.player_pin || values.password || '';
-      const result=await api('/'+authMode,{name,password});token=result.token;user=result.user;localStorage.setItem('aurora.token',token);await refreshLobby();
+      let result;
+      try {
+        result = await api('/' + authMode, { name, password });
+      } catch (err) {
+        if (authMode === 'login' && err.message.toLowerCase().includes('incorreto')) {
+          try {
+            result = await api('/register', { name, password });
+            toast('Conta conectada!');
+          } catch {
+            throw err;
+          }
+        } else {
+          throw err;
+        }
+      }
+      token = result.token;
+      user = result.user;
+      localStorage.setItem('aurora.token', token);
+      localStorage.setItem('cm.creds', JSON.stringify({ name, password }));
+      await refreshLobby();
     }else if(f.id==='create-room'){const r=await api('/rooms',{...values,capacity:Number(values.capacity),points:Number(values.points),buyIn:Number(values.buyIn||0),private:values.private==='on',bots:Number(values.bots||0)});$('#modal').close();await openRoom(r.id);}
     else if(f.id==='join-code'){const r=await api('/join',values);$('#modal').close();await openRoom(r.id);}
     else if(f.id==='chat'){await roomAction('chat',values);$('#modal').close();}
@@ -339,7 +401,17 @@ setInterval(async()=>{
 },700);
 window.addEventListener('resize',()=>{if(room)renderRoom();});
 renderAuth();
-if(token&&(offline||base)){try{await refreshLobby();}catch(err){toast(err.message);}}
+(async () => {
+  if (token && (offline || base)) {
+    try {
+      await refreshLobby();
+      return;
+    } catch {}
+  }
+  if (!offline && base) {
+    await tryAutoLogin();
+  }
+})();
 
 document.addEventListener('visibilitychange',()=>{if(offline){if(document.hidden)localGame.pause();else if(room)localGame.resume();}});
 window.addEventListener('pagehide',()=>{if(offline)localGame.pause();});
