@@ -4,6 +4,7 @@ import { animateDealing, stopDealing } from './dealing.js';
 import { syncGroups, moveCard, installHandDrag } from './hand-layout.js';
 import { OfflineGame } from './offline.js';
 import { arena, animateAction } from './arena.js';
+import { initVoice, startTransmitting, stopTransmitting, leaveVoice } from './voice.js';
 const $ = (s) => document.querySelector(s);
 const escape = (v) => String(v ?? '').replace(/[&<>"']/g,c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const DEFAULT_SERVER = 'https://cachetao.onrender.com';
@@ -284,8 +285,41 @@ function createRoomModal(){
   }
 }
 async function refreshLobby(render=true){const data=await api('/lobby');lobby=data;user=data.user;if(render&&!room)renderLobby();}
-async function openRoom(id){roomWanted=id;const data=await api('/rooms/'+id);if(roomWanted!==id)return;room=data;room.clockOffset=data.serverTime-Date.now();selected=null;lastView='';previousHand=new Set();renderRoom();}
-async function roomAction(action,body={}){if(!room)return;const data=await api('/rooms/'+room.id+'/'+action,body);if(action==='leave'){room=null;roomWanted=null;await refreshLobby();}else{room=data;room.clockOffset=data.serverTime-Date.now();renderRoom();if(data.lastAction?.type==='badKnock')toast('Batida inválida. Agora você só pode bater comprando do monte fechado.');sound(data.status==='roundEnd'||data.status==='finished'?'win':'card');}}
+async function openRoom(id){
+  roomWanted=id;
+  const data=await api('/rooms/'+id);
+  if(roomWanted!==id)return;
+  room=data;
+  room.clockOffset=data.serverTime-Date.now();
+  selected=null;
+  lastView='';
+  previousHand=new Set();
+  if(!room.offline && base && user){
+    initVoice(base, room.id, user, (speakerId, isSpeaking, speakerName) => {
+      if(!window.__speakingUsers) window.__speakingUsers = new Set();
+      if(isSpeaking) window.__speakingUsers.add(speakerId);
+      else window.__speakingUsers.delete(speakerId);
+      renderRoom();
+    });
+  }
+  renderRoom();
+}
+async function roomAction(action,body={}){
+  if(!room)return;
+  const data=await api('/rooms/'+room.id+'/'+action,body);
+  if(action==='leave'){
+    leaveVoice();
+    room=null;
+    roomWanted=null;
+    await refreshLobby();
+  }else{
+    room=data;
+    room.clockOffset=data.serverTime-Date.now();
+    renderRoom();
+    if(data.lastAction?.type==='badKnock')toast('Batida inválida. Agora você só pode bater comprando do monte fechado.');
+    sound(data.status==='roundEnd'||data.status==='finished'?'win':'card');
+  }
+}
 document.addEventListener('click',async e=>{
   const b=e.target.closest('button');if(!b||b.disabled)return;
   if(b.dataset.auth){authMode=b.dataset.auth;renderAuth();return;}
@@ -417,3 +451,34 @@ document.addEventListener('visibilitychange',()=>{if(offline){if(document.hidden
 window.addEventListener('pagehide',()=>{if(offline)localGame.pause();});
 
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stopDealing();else lastView='';});
+
+// Live Voice (Push-to-Talk) Button Handler
+document.addEventListener('pointerdown', async (e) => {
+  const btn = e.target.closest('#voice-ptt-btn');
+  if (!btn) return;
+  e.preventDefault();
+  btn.classList.add('transmitting');
+  const txt = btn.querySelector('.voice-txt');
+  if (txt) txt.textContent = 'Ligando...';
+  try {
+    await startTransmitting();
+    if (txt) txt.textContent = 'Gravando 🔴';
+  } catch (err) {
+    btn.classList.remove('transmitting');
+    if (txt) txt.textContent = 'Falar';
+    toast('Permissão de microfone necessária.');
+  }
+});
+
+function releaseVoicePtt() {
+  const btn = document.querySelector('#voice-ptt-btn');
+  if (!btn || !btn.classList.contains('transmitting')) return;
+  btn.classList.remove('transmitting');
+  const txt = btn.querySelector('.voice-txt');
+  if (txt) txt.textContent = 'Falar';
+  stopTransmitting();
+}
+
+document.addEventListener('pointerup', releaseVoicePtt);
+document.addEventListener('pointercancel', releaseVoicePtt);
+

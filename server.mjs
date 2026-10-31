@@ -2,6 +2,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { WebSocketServer } from 'ws';
 import { newRoom, addPlayer, startRound, roomView, move, tick, touch, requireThat, declarePifado, reenter, claimDiscard, canStartNextRound, declineReentry, decideRound, claimKnock } from './assets/game.js';
 import { setBots, stepBots } from './assets/bots.js';
 
@@ -287,6 +288,72 @@ const server = http.createServer(async (req, res) => {
     } else {
       res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
       res.end(content);
+    }
+  });
+});
+
+// Live Voice (Push-to-Talk) WebSocket Hub
+const wss = new WebSocketServer({ server });
+const roomSockets = new Map();
+
+wss.on('connection', (ws) => {
+  let currentRoomId = null;
+  let currentUserId = null;
+  let currentUserName = null;
+
+  ws.on('message', (message, isBinary) => {
+    if (isBinary) {
+      if (!currentRoomId) return;
+      const sockets = roomSockets.get(currentRoomId);
+      if (!sockets) return;
+      for (const s of sockets) {
+        if (s !== ws && s.readyState === 1) {
+          s.send(message, { binary: true });
+        }
+      }
+      return;
+    }
+
+    try {
+      const data = JSON.parse(message.toString());
+      if (data.type === 'join-voice') {
+        currentRoomId = data.roomId;
+        currentUserId = data.userId;
+        currentUserName = data.name;
+        if (!roomSockets.has(currentRoomId)) {
+          roomSockets.set(currentRoomId, new Set());
+        }
+        roomSockets.get(currentRoomId).add(ws);
+      } else if (data.type === 'speaking') {
+        if (!currentRoomId) return;
+        const sockets = roomSockets.get(currentRoomId);
+        if (!sockets) return;
+        const payload = JSON.stringify({
+          type: 'speaking',
+          userId: currentUserId,
+          name: currentUserName,
+          speaking: !!data.speaking
+        });
+        for (const s of sockets) {
+          if (s !== ws && s.readyState === 1) {
+            s.send(payload);
+          }
+        }
+      }
+    } catch {}
+  });
+
+  ws.on('close', () => {
+    if (currentRoomId && roomSockets.has(currentRoomId)) {
+      const set = roomSockets.get(currentRoomId);
+      set.delete(ws);
+      if (set.size === 0) roomSockets.delete(currentRoomId);
+      else {
+        const payload = JSON.stringify({ type: 'speaking', userId: currentUserId, speaking: false });
+        for (const s of set) {
+          if (s.readyState === 1) s.send(payload);
+        }
+      }
     }
   });
 });

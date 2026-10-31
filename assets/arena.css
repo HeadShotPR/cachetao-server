@@ -27,3 +27,73 @@
 .arena-table.players-6 .seat-cards,.arena-table.players-7 .seat-cards,.arena-table.players-8 .seat-cards,.arena-table.players-9 .seat-cards,.arena-table.players-10 .seat-cards{font-size:8px;top:16px}
 .arena-table.players-8 .arena-seat,.arena-table.players-9 .arena-seat,.arena-table.players-10 .arena-seat{min-width:55px}
 
+/* Push-to-Talk (PTT) Live Voice Button */
+.voice-ptt-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #1e293b, #0f172a);
+  border: 1.5px solid #38bdf8;
+  color: #38bdf8;
+  border-radius: 9999px;
+  padding: 8px 14px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.voice-ptt-button:active,
+.voice-ptt-button.transmitting {
+  background: linear-gradient(135deg, #ef4444, #b91c1c) !important;
+  border-color: #f87171 !important;
+  color: #ffffff !important;
+  transform: scale(1.06);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.7);
+  animation: pulse-ptt 0.8s infinite alternate;
+}
+@keyframes pulse-ptt {
+  0% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+  100% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.95); }
+}
+
+/* Avatar speaking indicator */
+.arena-seat.is-speaking .avatar,
+.arena-self.is-speaking .avatar {
+  box-shadow: 0 0 0 4px #22c55e, 0 0 16px #22c55e !important;
+  animation: speaking-pulse 0.6s infinite alternate;
+}
+@keyframes speaking-pulse {
+  0% { box-shadow: 0 0 0 3px #22c55e, 0 0 10px rgba(34, 197, 94, 0.5); }
+  100% { box-shadow: 0 0 0 6px #4ade80, 0 0 22px rgba(74, 222, 128, 0.9); }
+}
+.speaking-glow {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #15803d;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  animation: bounce-speaking 0.6s infinite alternate;
+  z-index: 10;
+}
+.speaking-glow.self {
+  background: #dc2626;
+}
+@keyframes bounce-speaking {
+  0% { transform: translateX(-50%) translateY(0); }
+  100% { transform: translateX(-50%) translateY(-3px); }
+}
+
+
