@@ -32,6 +32,9 @@ export function unlockAudio() {
       ctx.resume().catch(() => {});
     }
   } catch {}
+  if (typeof window !== 'undefined' && window.AndroidVoice) {
+    try { window.AndroidVoice.setSpeakerphoneOn(true); } catch {}
+  }
 }
 
 // Auto-unlock audio on any user interaction with the screen
@@ -62,6 +65,7 @@ export function initVoice(serverBase, roomId, user, onSpeakingChange) {
         userId: currentUser.id,
         name: currentUser.name
       }));
+      unlockAudio();
     };
 
     ws.onmessage = (event) => {
@@ -75,6 +79,13 @@ export function initVoice(serverBase, roomId, user, onSpeakingChange) {
         return;
       }
 
+      // Binary PCM Audio packet:
+      // Fixed 32-byte header:
+      // [0..1] uint16: userId length
+      // [2..23] utf-8 userId bytes
+      // [24..27] uint32: sampleRate
+      // [28..31] uint32: sampleCount
+      // [32..] int16 PCM audio samples
       if (event.data instanceof ArrayBuffer) {
         handleIncomingAudio(event.data);
       }
@@ -90,33 +101,35 @@ export function initVoice(serverBase, roomId, user, onSpeakingChange) {
 
 function handleIncomingAudio(arrayBuffer) {
   try {
+    if (!arrayBuffer || arrayBuffer.byteLength <= 32) return;
+
     const ctx = getAudioContext();
     if (ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
     }
 
-    const dataView = new DataView(arrayBuffer);
-    const idLen = dataView.getUint16(0, true);
+    const view = new DataView(arrayBuffer);
+    const idLen = Math.min(view.getUint16(0, true), 22);
     const idBytes = new Uint8Array(arrayBuffer, 2, idLen);
     const userId = new TextDecoder().decode(idBytes);
-
-    const sampleRate = dataView.getUint32(2 + idLen, true) || 44100;
-    const pcmOffset = 2 + idLen + 4;
-    const pcmBytes = new Int16Array(arrayBuffer, pcmOffset);
-    if (pcmBytes.length === 0) return;
+    const sampleRate = view.getUint32(24, true) || 44100;
 
     // Visual indicator on table
-    if (onSpeakingCallback) {
+    if (onSpeakingCallback && userId) {
       onSpeakingCallback(userId, true);
       if (speakerTimeouts.has(userId)) clearTimeout(speakerTimeouts.get(userId));
       speakerTimeouts.set(userId, setTimeout(() => {
         if (onSpeakingCallback) onSpeakingCallback(userId, false);
-      }, 400));
+      }, 350));
     }
 
-    const float32 = new Float32Array(pcmBytes.length);
-    for (let i = 0; i < pcmBytes.length; i++) {
-      float32[i] = pcmBytes[i] / 32768.0;
+    // Slice arrayBuffer at offset 32 to guarantee zero-offset Int16Array alignment
+    const pcm16 = new Int16Array(arrayBuffer.slice(32));
+    if (pcm16.length === 0) return;
+
+    const float32 = new Float32Array(pcm16.length);
+    for (let i = 0; i < pcm16.length; i++) {
+      float32[i] = pcm16[i] / 32768.0;
     }
 
     const audioBuffer = ctx.createBuffer(1, float32.length, sampleRate);
@@ -125,20 +138,20 @@ function handleIncomingAudio(arrayBuffer) {
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
 
-    // Gain node for clean amplification
+    // Boosted volume for clear voice
     const gainNode = ctx.createGain();
-    gainNode.gain.value = 1.6; // Boost speech clarity
+    gainNode.gain.value = 1.8;
     source.connect(gainNode);
     gainNode.connect(ctx.destination);
 
     const now = ctx.currentTime;
     if (nextPlayTime < now || nextPlayTime > now + 0.35) {
-      nextPlayTime = now + 0.025; // 25ms jitter buffer
+      nextPlayTime = now + 0.02; // 20ms jitter buffer
     }
     source.start(nextPlayTime);
     nextPlayTime += audioBuffer.duration;
   } catch (e) {
-    console.error('Error playing voice packet:', e);
+    console.error('Error handling incoming audio:', e);
   }
 }
 
@@ -147,6 +160,9 @@ export async function startTransmitting() {
 
   unlockAudio();
   const ctx = getAudioContext();
+  if (ctx.state === 'suspended') {
+    try { await ctx.resume(); } catch {}
+  }
 
   try {
     if (!micStream) {
@@ -169,24 +185,26 @@ export async function startTransmitting() {
     }
 
     micSource = ctx.createMediaStreamSource(micStream);
-    // 2048 samples (~46ms at 44.1kHz / ~42ms at 48kHz)
+    // 2048 samples (~43-46ms per packet)
     scriptNode = ctx.createScriptProcessor(2048, 1, 1);
 
     const encoder = new TextEncoder();
-    const idBytes = encoder.encode(currentUser.id);
-    const headerLen = 2 + idBytes.length + 4; // uint16 + idBytes + uint32 sampleRate
+    const idBytes = encoder.encode((currentUser?.id || '').slice(0, 22));
 
     scriptNode.onaudioprocess = (e) => {
       if (!isTransmitting || !ws || ws.readyState !== WebSocket.OPEN) return;
       const input = e.inputBuffer.getChannelData(0);
 
-      const buffer = new ArrayBuffer(headerLen + input.length * 2);
+      // Fixed 32-byte header + 2048 * 2 bytes PCM data (always 32-byte aligned)
+      const buffer = new ArrayBuffer(32 + input.length * 2);
       const view = new DataView(buffer);
       view.setUint16(0, idBytes.length, true);
       new Uint8Array(buffer, 2, idBytes.length).set(idBytes);
-      view.setUint32(2 + idBytes.length, ctx.sampleRate, true);
+      view.setUint32(24, ctx.sampleRate, true);
+      view.setUint32(28, input.length, true);
 
-      const pcm16 = new Int16Array(buffer, headerLen, input.length);
+      // Offset 32 is always a multiple of 2! Never throws RangeError
+      const pcm16 = new Int16Array(buffer, 32, input.length);
       for (let i = 0; i < input.length; i++) {
         const s = Math.max(-1, Math.min(1, input[i]));
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
@@ -195,7 +213,6 @@ export async function startTransmitting() {
       ws.send(buffer);
     };
 
-    // Mute mic output to own speakers to prevent feedback squeal
     silentGain = ctx.createGain();
     silentGain.gain.value = 0;
 
@@ -248,5 +265,4 @@ export function leaveVoice() {
     try { ws.close(); } catch {}
     ws = null;
   }
-  currentRoomId = null;
 }
